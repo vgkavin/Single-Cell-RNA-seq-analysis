@@ -10,8 +10,11 @@ library(tidyverse)
 library(patchwork)
 library(gridExtra)
 library(ggplot2)
-
-
+library(SingleR)
+library(celldex)
+library(Seurat)
+library(SeuratObject)
+library(pheatmap)
 
 
 
@@ -104,3 +107,45 @@ grid.arrange(PCA_HNSCC, UMAP_HNSCC, ncol=2)
 UMAP
 saveRDS(hnscc.integrated, "hnscc_KVG.rds")
 
+#Annotation of celltypes using SingleR (Source- Blurprint Encode project)
+Blueprint<- celldex::BlueprintEncodeData()
+
+#Extract counts data and make SCE dataset
+hnscc.KVG.counts <- GetAssayData(hnscc.integrated, assay = "integrated", layer = "counts")
+hnscc.KVG.counts <- as.SingleCellExperiment(hnscc.integrated)
+
+#Annotate
+pred <- SingleR(test = hnscc.KVG.counts,
+                ref = Blueprint,
+                labels = Blueprint$label.main)
+
+#update seurat metadata with annotation data
+hnscc.integrated$blueprint.main <- pred$labels[match(rownames(hnscc.integrated@meta.data), rownames(pred))]
+UMAP_SingleR <- DimPlot(hnscc.integrated, reduction = "umap", group.by = "blueprint.main") + ggtitle("SingleR")
+
+#change idents for further analysis
+Idents(hnscc.integrated) <- "blueprint.main"
+
+#verify the correctness of Blueprint encode based annotation
+#identify celltypes assigned and markers used for annotation
+
+celltypes_blueprint <- unique(hnscc.integrated@meta.data$blueprint.main)
+markers_blueprint <- FindAllMarkers(hnscc.integrated)
+
+top_markers_bp <- markers_blueprint %>%
+  group_by(cluster) %>%
+  top_n(n = 20, wt = avg_log2FC) %>%   # Select top 20 based on avg_log2FC
+  arrange(cluster, desc(avg_log2FC)) 
+
+#identify top markers for each cells and store it for ease of access
+Cells <- c("Fibroblast", "Keratinocytes", "Endothelial cell")
+Hits <- c(5, 12, 9)
+Genes <- c("THY1, PCOLCE, COL5A3, GREM1, MMP11",
+           "KRT14, KRT17, KRT8, PKP3, S100A2, EPPK1, TP63, CALML3, LAMC2, LAMA3, LAMB3, COL17A1",
+           "CDH5, KDR, CLDN5, TIE1, ROBO4, CLEC14A, DLL4, PLVAP, and ANGPT2",
+)
+
+markers_bp <- data.frame(Cells = Cells, Hits = Hits, Genes = Genes)
+
+#visualize marker gene expression in UMAP to confirm presence in corresponsing cells
+FeaturePlot(hnscc.integrated, features = c("THY1","PCOLCE", "COL5A3", "GREM1", "MMP11"), min.cutoff = "q10", max.cutoff = "q90")
