@@ -4,17 +4,12 @@
 #performed SC transform and integration
 
 install.packages("Seurat")
-install.packages("spatstat.utils")
-remove.packages("spatstat.utils")
 library(Seurat)
 library(SeuratObject)
 library(tidyverse)
 library(patchwork)
 library(gridExtra)
 library(ggplot2)
-install.packages('BiocManager')
-BiocManager::install('glmGamPoi')
-install.packages("gtable")
 
 
 
